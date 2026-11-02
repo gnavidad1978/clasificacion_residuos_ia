@@ -2,6 +2,7 @@
 
 Lee resultados/*.json (los escribe el callback RegistroResultados) y genera:
     resultados/tabla_comparativa_validacion.csv   media y desviacion por modelo
+    resultados/tabla_f1_por_categoria.csv         F1 de cada categoria, media y desviacion
     resultados/figuras/curvas.png                 perdida y F1 por epoca
     resultados/figuras/confusion_<modelo>.png     matriz de confusion en validacion
     resultados/figuras/errores_<modelo>.png       fotos de validacion mal clasificadas
@@ -40,6 +41,13 @@ def main():
                 if not f.endswith("linea_base.json")]
     assert archivos, "No hay resultados; entrena primero con main.py fit"
     res = pd.DataFrame([json.load(open(f)) for f in archivos])
+    # Segundos por epoca (incluye la validacion de cada epoca); las corridas antiguas no lo
+    # guardaban, se estima con minutos totales entre epocas entrenadas
+    if "segundos_por_epoca" not in res:
+        res["segundos_por_epoca"] = None
+    res["seg_epoca"] = [r["segundos_por_epoca"] if pd.notna(r["segundos_por_epoca"])
+                        else 60 * r["minutos_entrenamiento"] / len(r["historia"]) for _, r in res.iterrows()]
+    res["epocas"] = [len(h) for h in res["historia"]]
     dir_fig = os.path.join(a.resultados, "figuras")
     os.makedirs(dir_fig, exist_ok=True)
 
@@ -50,9 +58,16 @@ def main():
         exactitud_val=("exactitud_val", media_desv),
         parametros_M=("parametros_millones", lambda s: f"{s.iloc[0]:.1f}"),
         tamano_MB=("tamano_MB", lambda s: f"{s.iloc[0]:.0f}"),
-        minutos_entrenamiento=("minutos_entrenamiento", lambda s: media_desv(s, 1)),
+        epocas=("epocas", lambda s: media_desv(s, 1)),
+        seg_por_epoca=("seg_epoca", lambda s: media_desv(s, 0)),
         ms_por_foto_cpu=("ms_por_foto_cpu", lambda s: media_desv(s, 0)),
     )
+    ruta_costo = os.path.join(a.resultados, "costo_computo.csv")
+    if os.path.exists(ruta_costo):
+        costo = pd.read_csv(ruta_costo, index_col="modelo")
+        tabla["fotos_s_entren_GPU"] = costo["fotos_por_s_entrenamiento"].round(0).astype("Int64")
+        tabla["fotos_s_inferencia_GPU"] = costo["fotos_por_s_inferencia"].round(0).astype("Int64")
+    tabla = tabla.sort_values("f1_macro_val", ascending=False)
     ruta_base = os.path.join(a.resultados, "linea_base.json")
     if os.path.exists(ruta_base):
         base = json.load(open(ruta_base))
@@ -60,8 +75,22 @@ def main():
     print(tabla.to_string())
     tabla.to_csv(os.path.join(a.resultados, "tabla_comparativa_validacion.csv"))
 
-    # Curvas de la primera semilla de cada modelo
-    primera = res.sort_values("semilla").groupby("modelo").head(1).reset_index(drop=True)
+    # F1 por categoria, media y desviacion entre semillas
+    filas = []
+    for _, r in res.iterrows():
+        rep_cat = classification_report(r["reales_val"], r["predichas_val"], labels=list(range(len(CATEGORIAS))),
+                                        target_names=CATEGORIAS, output_dict=True, zero_division=0)
+        for c in CATEGORIAS:
+            filas.append({"modelo": r["modelo"], "categoria": c, "f1": rep_cat[c]["f1-score"]})
+    por_cat = pd.DataFrame(filas).groupby(["categoria", "modelo"])["f1"].agg(media_desv).unstack("modelo")
+    por_cat = por_cat.reindex(CATEGORIAS)
+    print("\nF1 por categoria (validacion, media entre semillas):")
+    print(por_cat.to_string())
+    por_cat.to_csv(os.path.join(a.resultados, "tabla_f1_por_categoria.csv"))
+
+    # Curvas: una corrida por modelo, de preferencia la semilla 42
+    primera = (res.assign(orden=(res["semilla"] != 42).astype(int))
+               .sort_values(["orden", "semilla"]).groupby("modelo").head(1).reset_index(drop=True))
     fig, ejes = plt.subplots(1, len(primera), figsize=(5.5 * len(primera), 4.3), squeeze=False)
     for ax, (_, r) in zip(ejes[0], primera.iterrows()):
         h = pd.DataFrame(r["historia"])

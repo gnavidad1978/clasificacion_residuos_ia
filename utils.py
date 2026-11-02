@@ -44,6 +44,58 @@ def medir_inferencia_cpu(modelo: torch.nn.Module, img_size: int = 224, hilos: in
     return float(np.median(tiempos))
 
 
+def medir_rendimiento(modelo: torch.nn.Module, img_size: int = 224, lote: int = 32,
+                      pasos: int = 20, dispositivo: str = None) -> dict:
+    """Fotos por segundo que el modelo procesa al entrenar y al inferir, con datos sinteticos.
+
+    Al usar tensores ya en memoria se elimina el tiempo de leer y transformar fotos, de modo
+    que la cifra refleja solo el costo de computo de la arquitectura.
+    """
+    dispositivo = dispositivo or ("cuda" if torch.cuda.is_available() else "cpu")
+    m = copy.deepcopy(modelo).to(dispositivo)
+    usar_amp = dispositivo == "cuda"
+    x = torch.randn(lote, 3, img_size, img_size, device=dispositivo)
+    y = torch.randint(0, 6, (lote,), device=dispositivo)
+    opt = torch.optim.AdamW(m.parameters(), lr=1e-4)
+    escalador = torch.amp.GradScaler(enabled=usar_amp)
+    criterio = torch.nn.CrossEntropyLoss()
+    sincronizar = torch.cuda.synchronize if dispositivo == "cuda" else (lambda: None)
+    if dispositivo == "cuda":
+        torch.cuda.reset_peak_memory_stats()
+
+    def paso_entrenamiento():
+        opt.zero_grad(set_to_none=True)
+        with torch.autocast(device_type=dispositivo, enabled=usar_amp):
+            perdida = criterio(m(x), y)
+        escalador.scale(perdida).backward()
+        escalador.step(opt)
+        escalador.update()
+
+    m.train()
+    for _ in range(3):
+        paso_entrenamiento()
+    sincronizar()
+    t0 = time.perf_counter()
+    for _ in range(pasos):
+        paso_entrenamiento()
+    sincronizar()
+    fotos_s_ent = pasos * lote / (time.perf_counter() - t0)
+
+    m.eval()
+    with torch.no_grad(), torch.autocast(device_type=dispositivo, enabled=usar_amp):
+        for _ in range(3):
+            m(x)
+        sincronizar()
+        t0 = time.perf_counter()
+        for _ in range(pasos):
+            m(x)
+        sincronizar()
+    fotos_s_inf = pasos * lote / (time.perf_counter() - t0)
+    memoria = torch.cuda.max_memory_allocated() / 1e6 if dispositivo == "cuda" else None
+    return {"fotos_por_s_entrenamiento": fotos_s_ent, "fotos_por_s_inferencia": fotos_s_inf,
+            "memoria_GPU_MB": memoria, "dispositivo": dispositivo}
+
+
 @torch.no_grad()
 def predecir(modelo, cargador, dispositivo):
     modelo.eval().to(dispositivo)
@@ -65,17 +117,28 @@ class RegistroResultados(L.Callback):
     def on_fit_start(self, trainer, pl_module):
         self.inicio = time.time()
         self.historia = []
+        print(f"\nEntrenando {pl_module.hparams.backbone} con semilla {os.environ.get('PL_GLOBAL_SEED')}")
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        self.inicio_epoca = time.time()
 
     def on_train_epoch_end(self, trainer, pl_module):
+        # En Lightning este punto llega despues de la validacion de la epoca
         m = trainer.callback_metrics
         valor = lambda k: float(m[k]) if k in m else None
-        self.historia.append({
+        fila = {
             "epoca": trainer.current_epoch + 1,
             "perdida_ent": valor("train/loss"),
             "perdida_val": valor("val/loss"),
             "f1_val": valor("val/f1"),
             "exactitud_val": valor("val/acc"),
-        })
+            "segundos": time.time() - self.inicio_epoca,
+        }
+        self.historia.append(fila)
+        fmt = lambda v: f"{v:.3f}" if v is not None else "  -  "
+        print(f"  epoca {fila['epoca']:2d} | perdida ent {fmt(fila['perdida_ent'])} | "
+              f"perdida val {fmt(fila['perdida_val'])} | F1 val {fmt(fila['f1_val'])} | "
+              f"{fila['segundos']:.0f} s")
 
     def on_fit_end(self, trainer, pl_module):
         minutos = (time.time() - self.inicio) / 60
@@ -103,6 +166,8 @@ class RegistroResultados(L.Callback):
             "parametros_millones": contar_parametros(mejor.net) / 1e6,
             "tamano_MB": os.path.getsize(ruta_pesos) / 1e6,
             "minutos_entrenamiento": minutos,
+            "epocas_entrenadas": len(self.historia),
+            "segundos_por_epoca": float(np.mean([h["segundos"] for h in self.historia])) if self.historia else None,
             "ms_por_foto_cpu": medir_inferencia_cpu(mejor.net, trainer.datamodule.hparams.img_size,
                                                     self.hilos_cpu),
             "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",

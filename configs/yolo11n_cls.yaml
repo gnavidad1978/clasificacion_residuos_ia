@@ -16,6 +16,7 @@ trainer:
   accelerator: auto        # "cpu" | "gpu" | "auto"
   devices: auto
   precision: "16-mixed"    # "32-true" si no hay GPU
+  enable_progress_bar: false   # el avance por epoca lo imprime RegistroResultados
 
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger

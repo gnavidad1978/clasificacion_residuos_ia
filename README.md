@@ -15,29 +15,45 @@ clasificacion_residuos_ia/
 ├── dataset.py           LightningDataModule que lee la partición fija
 ├── prepare_data.py      descarga RealWaste, acomodo a seis categorías, partición, exploración y línea base
 ├── utils.py             callback que guarda desempeño y costo de cada corrida
-├── report.py            tabla comparativa, curvas, matrices de confusión y errores
+├── benchmark.py         velocidad de cada red en GPU con datos sintéticos (costo de cómputo)
+├── report.py            tabla comparativa, F1 por categoría, curvas, matrices de confusión y errores
 ├── configs/             un YAML por modelo
 │   ├── mobilenet_v3.yaml
 │   ├── resnet50.yaml
 │   ├── yolo11n_cls.yaml
 │   └── vit_b_16.yaml
 ├── notebooks/
-│   └── Proyecto_final.ipynb   cuaderno de Colab que ejecuta todo
+│   └── Proyecto_final.ipynb   cuaderno de Colab que ejecuta y presenta el proyecto
 └── requirements.txt
 ```
 
 Los datos, los registros de TensorBoard, los modelos y los resultados no se suben al repositorio (ver `.gitignore`); en Colab se guardan en Google Drive.
 
-## Uso en Colab
+## Cómo ejecutar el cuaderno en Colab
 
-Abrir `notebooks/Proyecto_final.ipynb` en Colab con GPU (Entorno de ejecución, Cambiar tipo de entorno, GPU T4) y ejecutar las celdas en orden. En resumen, el cuaderno hace:
+1. Abrir el cuaderno directamente desde GitHub con este enlace: https://colab.research.google.com/github/gnavidad1978/clasificacion_residuos_ia/blob/main/notebooks/Proyecto_final.ipynb
+2. Activar la GPU: Entorno de ejecución, Cambiar tipo de entorno de ejecución, GPU T4, Guardar.
+3. Ejecutar todo: Entorno de ejecución, Ejecutar todo (Ctrl+F9).
+4. Aceptar los dos avisos: que el cuaderno viene de GitHub (Ejecutar de todos modos) y el permiso para conectar Google Drive.
+5. El archivo de RealWaste debe estar en `MyDrive/proyecto_IA/realwaste.zip`; si no está, `prepare_data.py` lo descarga (unos 657 MB).
+
+Tiempos aproximados con GPU T4: alrededor de 8 minutos por entrenamiento, es decir cerca de hora y media para los 4 modelos con 3 semillas. Para una prueba rápida se puede dejar `SEMILLAS = [42]` en la primera celda.
+
+Si Colab se desconecta, no se pierde lo terminado: cada entrenamiento guarda su resultado en `MyDrive/proyecto_IA/repo_resultados` y, al volver a ejecutar todo, la celda de entrenamiento salta lo que ya existe. Conviene evitar que la computadora se suspenda mientras entrena (cargador conectado y suspensión en Nunca).
+
+Mientras entrena, si TensorBoard muestra *Data could not be loaded*, no afecta el entrenamiento; basta con volver a ejecutar esa celda al terminar.
+
+El conjunto de prueba se evalúa una sola vez, al final, quitando el comentario de la última celda del cuaderno.
+
+En resumen, el cuaderno ejecuta:
 
 ```bash
-git clone https://github.com/<usuario>/clasificacion_residuos_ia.git
+git clone https://github.com/gnavidad1978/clasificacion_residuos_ia.git
 cd clasificacion_residuos_ia
 pip install -r requirements.txt
 python prepare_data.py --zip /content/drive/MyDrive/proyecto_IA/realwaste.zip
-python main.py fit --config configs/mobilenet_v3.yaml
+python main.py fit --config configs/mobilenet_v3.yaml --seed_everything 42
+python benchmark.py
 python report.py
 ```
 
@@ -75,7 +91,7 @@ La normalización usa los valores publicados de ImageNet, que no se calculan con
 
 YOLO11n-cls se entrena con el mismo bucle, aumentos y regla de paro que las demás redes, no con el entrenador de Ultralytics, para que la única diferencia entre modelos sea la arquitectura.
 
-El tiempo por foto se mide en CPU con 4 hilos y una foto a la vez, como aproximación a una Raspberry Pi 5; no sustituye la medición en el dispositivo.
+El tiempo por foto se mide en CPU con 4 hilos y una foto a la vez, como aproximación a una Raspberry Pi 5; no sustituye la medición en el dispositivo. El tiempo total de entrenamiento no sirve para comparar arquitecturas en Colab gratuito, porque leer y transformar las fotos con 2 procesadores tarda lo mismo para cualquier red y cada modelo se detiene en una época distinta; por eso `benchmark.py` mide las fotos por segundo de cada red en GPU con datos sintéticos, y el reporte muestra segundos por época.
 
 ## Datos
 
