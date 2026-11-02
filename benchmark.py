@@ -3,7 +3,8 @@
 El tiempo total de entrenamiento no sirve para comparar modelos en Colab gratuito:
 leer y transformar las fotos con 2 procesadores tarda lo mismo para cualquier red, y
 cada modelo se detiene en una epoca distinta. Este script mide la velocidad de cada red
-con datos sinteticos ya cargados en memoria, de modo que solo cuenta el computo.
+con datos sinteticos ya cargados en memoria, de modo que solo cuenta el computo. Usa la GPU
+si esta disponible y, si no, el procesador (en Colab gratuito, unos 45 minutos).
 
 Uso:
     python benchmark.py

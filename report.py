@@ -65,8 +65,9 @@ def main():
     ruta_costo = os.path.join(a.resultados, "costo_computo.csv")
     if os.path.exists(ruta_costo):
         costo = pd.read_csv(ruta_costo, index_col="modelo")
-        tabla["fotos_s_entren_GPU"] = costo["fotos_por_s_entrenamiento"].round(0).astype("Int64")
-        tabla["fotos_s_inferencia_GPU"] = costo["fotos_por_s_inferencia"].round(0).astype("Int64")
+        disp = str(costo["dispositivo"].iloc[0]).upper()  # CPU o CUDA, segun donde se midio
+        tabla[f"fotos_s_entren_{disp}"] = costo["fotos_por_s_entrenamiento"].round(1)
+        tabla[f"fotos_s_inferencia_{disp}"] = costo["fotos_por_s_inferencia"].round(1)
     tabla = tabla.sort_values("f1_macro_val", ascending=False)
     ruta_base = os.path.join(a.resultados, "linea_base.json")
     if os.path.exists(ruta_base):
