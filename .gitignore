@@ -1,0 +1,20 @@
+# Datos, modelos y resultados no van a git: viven en Google Drive
+data/
+runs/
+resultados/
+models/
+mlruns/
+*.ckpt
+*.pt
+*.pth
+*.zip
+*.jpg
+*.jpeg
+*.png
+# Archivos temporales
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.vscode/
+.idea/
