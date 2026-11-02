@@ -1,0 +1,7 @@
+# torch, torchvision, numpy, pandas, scikit-learn, matplotlib y pillow ya vienen en Colab;
+# se usan las versiones de Colab y quedan registradas en la salida del notebook.
+lightning==2.6.6
+torchmetrics==1.9.0
+jsonargparse[signatures]==4.53.0
+tensorboard==2.21.0
+ultralytics==8.4.198
