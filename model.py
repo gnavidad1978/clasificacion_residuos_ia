@@ -5,7 +5,8 @@ Redes disponibles (parametro ``backbone`` del YAML):
     mobilenet_v3_small  CNN muy ligera (torchvision)
     resnet50            CNN estandar con conexiones residuales (torchvision)
     yolo11n_cls         CNN de la familia YOLO para clasificacion (Ultralytics)
-    vit_b_16            Vision Transformer (torchvision)
+    deit_small          Vision Transformer pequeno, de tamano comparable a ResNet-50 (timm)
+    vit_b_16            Vision Transformer base (torchvision)
 
 Todas parten de pesos preentrenados en ImageNet; solo se sustituye la ultima
 capa por una de ``num_classes`` salidas y se reentrena la red completa.
@@ -17,9 +18,7 @@ import lightning as L
 import torchmetrics
 from torchvision import models
 
-CATEGORIAS = ["vidrio", "plastico", "metal", "papel_carton", "dificil_reciclaje", "organico"]
-MEDIA_IMAGENET = (0.485, 0.456, 0.406)
-DESV_IMAGENET = (0.229, 0.224, 0.225)
+from categorias import CATEGORIAS, MEDIA_IMAGENET, DESV_IMAGENET  # noqa: F401
 
 
 class YOLOClasificador(nn.Module):
@@ -65,13 +64,17 @@ def crear_red(backbone: str, num_classes: int, pretrained: bool) -> nn.Module:
         red.fc = nn.Linear(red.fc.in_features, num_classes)
     elif backbone == "yolo11n_cls":
         red = YOLOClasificador(num_classes, pretrained)
+    elif backbone == "deit_small":
+        import timm  # solo se importa si se usa este modelo
+        # Pesos de ImageNet-1K con la receta de DeiT (Touvron et al., 2021), igual que el ViT-B
+        red = timm.create_model("deit_small_patch16_224", pretrained=pretrained, num_classes=num_classes)
     elif backbone == "vit_b_16":
         red = models.vit_b_16(weights="IMAGENET1K_V1" if pretrained else None)
         red.heads.head = nn.Linear(red.heads.head.in_features, num_classes)
     else:
         raise ValueError(
             f"backbone desconocido: '{backbone}'. Usa mobilenet_v3_large, mobilenet_v3_small, "
-            "resnet50, yolo11n_cls o vit_b_16."
+            "resnet50, yolo11n_cls, deit_small o vit_b_16."
         )
     return red
 

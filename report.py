@@ -23,7 +23,7 @@ import pandas as pd
 from PIL import Image
 from sklearn.metrics import ConfusionMatrixDisplay, classification_report, confusion_matrix
 
-from model import CATEGORIAS
+from categorias import CATEGORIAS, ETIQUETAS
 
 
 def media_desv(s, dec=3):
@@ -80,11 +80,12 @@ def main():
     filas = []
     for _, r in res.iterrows():
         rep_cat = classification_report(r["reales_val"], r["predichas_val"], labels=list(range(len(CATEGORIAS))),
-                                        target_names=CATEGORIAS, output_dict=True, zero_division=0)
+                                        target_names=ETIQUETAS, output_dict=True, zero_division=0)
         for c in CATEGORIAS:
-            filas.append({"modelo": r["modelo"], "categoria": c, "f1": rep_cat[c]["f1-score"]})
+            filas.append({"modelo": r["modelo"], "categoria": c, "f1": rep_cat[ETIQUETAS[CATEGORIAS.index(c)]]["f1-score"]})
     por_cat = pd.DataFrame(filas).groupby(["categoria", "modelo"])["f1"].agg(media_desv).unstack("modelo")
     por_cat = por_cat.reindex(CATEGORIAS)
+    por_cat.index = ETIQUETAS
     print("\nF1 por categoria (validacion, media entre semillas):")
     print(por_cat.to_string())
     por_cat.to_csv(os.path.join(a.resultados, "tabla_f1_por_categoria.csv"))
@@ -119,10 +120,10 @@ def main():
     for _, r in primera.iterrows():
         print(f"\n{r['modelo']}, semilla {r['semilla']}")
         print(classification_report(r["reales_val"], r["predichas_val"], labels=etiquetas,
-                                    target_names=CATEGORIAS, digits=3, zero_division=0))
+                                    target_names=ETIQUETAS, digits=3, zero_division=0))
         cm = confusion_matrix(r["reales_val"], r["predichas_val"], labels=etiquetas)
         fig, ax = plt.subplots(figsize=(6, 5))
-        ConfusionMatrixDisplay(cm, display_labels=CATEGORIAS).plot(ax=ax, cmap="Blues", colorbar=False,
+        ConfusionMatrixDisplay(cm, display_labels=ETIQUETAS).plot(ax=ax, cmap="Blues", colorbar=False,
                                                                    xticks_rotation=35)
         ax.set_title(f"{r['modelo']} (validacion)")
         plt.tight_layout()
@@ -139,8 +140,8 @@ def main():
             for ax, i in zip(ejes.flat, errores):
                 ruta = validacion.loc[i, "ruta"]
                 ax.imshow(Image.open(os.path.join(a.raiz_imagenes, ruta)).convert("RGB"))
-                ax.set_title(f"real: {CATEGORIAS[r['reales_val'][i]]}\ncreyo: "
-                             f"{CATEGORIAS[r['predichas_val'][i]]}\n{os.path.basename(ruta)}", fontsize=7)
+                ax.set_title(f"real: {ETIQUETAS[r['reales_val'][i]]}\ncreyo: "
+                             f"{ETIQUETAS[r['predichas_val'][i]]}\n{os.path.basename(ruta)}", fontsize=7)
             fig.suptitle(f"Errores de {r['modelo']} en validacion", fontsize=11)
             plt.tight_layout()
             plt.savefig(os.path.join(dir_fig, f"errores_{r['modelo']}.png"), dpi=150)

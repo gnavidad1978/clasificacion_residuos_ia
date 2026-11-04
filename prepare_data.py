@@ -34,13 +34,15 @@ import pandas as pd
 from PIL import Image
 from sklearn.metrics import accuracy_score, f1_score
 
-from model import CATEGORIAS
+from categorias import CATEGORIAS
 
 URL_REALWASTE = "https://archive.ics.uci.edu/static/public/908/realwaste.zip"
 
 # Acomodo de las clases de RealWaste a las categorias de la NAE-SEMADES-007/2008.
-# Miscellaneous Trash a dificil reciclaje es interpretacion propia, pendiente de revision
-# por muestreo. Textile Trash se excluye: el campus no tiene bote de textiles.
+# Miscellaneous Trash se guarda con el identificador interno dificil_reciclaje, pero la
+# revision de 50 fotos mostro que no corresponde a esa categoria de la norma (ver
+# categorias.py); en tablas y figuras se reporta como "otros". Textile Trash se excluye:
+# el campus no tiene bote de textiles.
 MAPEO = {
     "Cardboard": "papel_carton",
     "Paper": "papel_carton",

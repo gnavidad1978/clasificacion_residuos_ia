@@ -15,7 +15,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import lightning as L
 
-from model import CATEGORIAS
+from categorias import CATEGORIAS
 
 
 class FotosResiduos(Dataset):

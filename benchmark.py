@@ -7,7 +7,8 @@ con datos sinteticos ya cargados en memoria, de modo que solo cuenta el computo.
 si esta disponible y, si no, el procesador (en Colab gratuito, unos 45 minutos).
 
 Uso:
-    python benchmark.py
+    python benchmark.py                       # todos los modelos
+    python benchmark.py --modelos deit_small  # solo uno; conserva lo ya medido
 Salida:
     resultados/costo_computo.csv
 """
@@ -21,7 +22,7 @@ import torch
 from model import crear_red
 from utils import contar_parametros, medir_rendimiento
 
-MODELOS = ["mobilenet_v3_large", "resnet50", "yolo11n_cls", "vit_b_16"]
+MODELOS = ["mobilenet_v3_large", "resnet50", "yolo11n_cls", "deit_small", "vit_b_16"]
 
 
 def main():
@@ -52,7 +53,11 @@ def main():
         ["parametros_millones", "fotos_por_s_entrenamiento", "fotos_por_s_inferencia",
          "segundos_computo_por_epoca", "memoria_GPU_MB", "dispositivo"]]
     os.makedirs(a.resultados, exist_ok=True)
-    tabla.to_csv(os.path.join(a.resultados, "costo_computo.csv"))
+    ruta = os.path.join(a.resultados, "costo_computo.csv")
+    if os.path.exists(ruta):  # conserva las mediciones previas de otros modelos
+        previa = pd.read_csv(ruta, index_col="modelo")
+        tabla = pd.concat([previa.drop(index=[m for m in tabla.index if m in previa.index]), tabla])
+    tabla.to_csv(ruta)
     print("\n" + tabla.round(1).to_string())
 
 
